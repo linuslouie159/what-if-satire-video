@@ -7,9 +7,11 @@ description: "Turn a narrated storyline into a 9:16 low-poly 3D satire video (\"
 
 The user narrates a storyline ("what if Yo-Chi disappeared… day 1 the queue stays… week 1 the xmms and xdds are estranged…"). You turn it into a finished vertical MP4 in a fixed house style. Build it with three.js scenes rendered frame by frame in headless Chromium, add a generated soundtrack, and deliver the file with SendUserFile.
 
+**Quality is the default, not an upgrade.** The user wants every video to look like a finished, premium short: detailed hero characters, cinematic lighting, bloom and colour grading, supersampled frames, readable overlays, and every shot checked at several moments before the full render. The Quality bar section says how.
+
 ## The house style (keep this consistent every time)
 - 1080x1920, 30 fps, about 40–50 s final length. Render at SPEED=1.25 by default: write the timeline in comfortable seconds and let the renderer compress it.
-- Low-poly blocky people: box torso, sphere head with hair cap, box limbs with hip/knee pivots, white shoes. Crowds are dense and goofy. Gags come from body language: freezing, '?' pop-ups over heads, slumping, sitting, sprinting, cheering.
+- Crowds are low-poly blocky people: box torso, sphere head with hair cap, box limbs with hip/knee pivots, white shoes (rounded boxes look better than sharp ones). Crowds are dense and goofy. The characters the story is about get a detailed hero model instead (see Hero models), so whatever the user wants emphasised, such as a uniform, a hairstyle or a car, reads clearly in close-ups. Gags come from body language: freezing, '?' pop-ups over heads, slumping, sitting, sprinting, cheering.
 - Blue-hour dusk sky by default. Night only for a 'then one night…' beat.
 - Text overlays are HTML over the canvas:
   - Opening title in Crimson Pro serif, centered, with key names in yellow (#ffd35a). Example: "What if **Yo-Chi** and **Molly Tea** just… disappeared?"
@@ -20,13 +22,37 @@ The user narrates a storyline ("what if Yo-Chi disappeared… day 1 the queue st
     - a location pill, e.g. ▶ SOMERSET, SINGAPORE
   - Italic serif captions in the lower middle, max 2 short lines, each held about 3 s in timeline time.
   - End with a fade to black and an italic "Part 2?".
-- Story shape: title → Day 1 setup → the vanishing (poof cloud plus a pale ghost rectangle on the wall) → people refusing to accept it → escalating time jumps (Day 2/3, Week 1/2, Month 1) with one absurd beat each → a twist or return at night → "Part 2?".
+- Story shape: title → Day 1 setup → the vanishing (poof cloud plus a pale ghost rectangle on the wall) → people refusing to accept it → escalating time jumps (Day 2/3, Week 1/2, Month 1) with one absurd beat each → a twist or return at night → "Part 2?". Other premises (a war, a face-off, something that keeps growing, a trend taking over) follow the same escalation. Show the premise on screen: in a war, the fights are the centrepiece (2–3 action shots with brawl clouds, POW!/BAM! bursts and knocked-out stars, slapstick only), not one implied clash.
 - Use the user's own slang and spelling exactly. If they say "xmm/xdd" or name a brand, use their words in captions from the first shot that's relevant. Spell real shop names correctly in plain lettering on signs. Never reproduce actual logos.
 - Reference photos or videos the user sends are only for set layout, colours and materials. Never put real people from them into the video.
+- No real, named people in the video at all: celebrities, influencers, executives or private individuals. That holds even as blocky figures, even when the user says they consented, and even for "a friend with the same name", because viewers will read the character as the real person. Offer a fictional stand-in with a role or a number ("the Grooming Inspector", "the two GOATs, #65 and #88") and keep the rest of the idea.
+- Signature designs (uniform prints, liveries, kits) are redrawn as originals in the same spirit and colours, never copied, and never with the logo.
+
+## Quality bar (the default for every video)
+- **Look test first.** As soon as the hero character and one set exist, render 1–2 frames at production settings with the real HUD and a caption. Send them side by side as `look_test.jpg` and keep building the other sets while the user looks. Before the full render, check a one-still-per-shot sheet too.
+- **Hero models.** Whatever the user wants emphasised (a uniform, a hairstyle, a car, a building) gets a detailed model and at least one close-up. Crowds stay blocky. The recipe is in Hero models below.
+- **References and assets before modelling.** Research the real place, uniform or object: WebSearch, WebFetch on Wikipedia for layout and dimensions, image_search, or Bing Images in the built-in browser when the user's computer is connected. Then pull CC0 assets (see Setup). Get facts right in the HUD stats and captions. A real in-joke found in research often becomes the strongest beat (an ex-stewardess's "the higher your hair hump, the more senior you are" carried a whole episode).
+- **Lighting.** Per set: one shadow-casting key with a 2048 map, a hemisphere fill, one to three point lights, and a rim or back light on the hero. Build each set in its own group at its own origin and toggle `G.visible` per shot, so a hidden set's lights drop out of the shaders. Give things that glow (screens, signs, bulbs, skylights) emissive values above 1 so they bloom. Keep point lights away from ceilings and glossy surfaces, where they blow out into white blobs.
+- **Post-processing** (post.js): HalfFloat composer → BokehPass on close-ups only → UnrealBloomPass at half resolution → grade and vignette → OutputPass. Shots can override `bloom`, `exposure` and `dof`. Night beats get lower exposure and less bloom so they read as night.
+- **Supersampling.** Render at `DPR=1.25` (1.5 when there's time) and let ffmpeg downscale with lanczos, encoding with `-preset slow -crf 16`. On SwiftShader, 4× MSAA costs more than DPR 1.25 and looks no better, so keep the composer's `samples` at 0.
+- **Readable overlays.** Soft dark radial backdrops sit behind the HUD and the captions (`#hudbg` and `#capbg` in the template), so white text holds up over light walls and floors.
+- **Effects that read as quality:** bloom on lights, screens and signs; water with real reflections (Reflector or Water, with a few blurred taps); instanced crowds in the hundreds or thousands; confetti, fireworks, sparkles and rain; procedural lit-window facades for skylines; slow push-ins, orbits and low-angle tracking shots; depth of field on the key close-up; colour or state changes shown as a sweep rather than a cut.
+- **Cost control** (2 cores, CPU WebGL): a scene-wide `scene.environment` roughly doubles frame time, so put `envMap` only on small glossy materials (hair, metal, pearls, polished floors, car paint). Transparent glass with an env map is also expensive; MeshBasicMaterial at about 0.07 opacity looks nearly the same. Instancing cuts draw calls, but per-pixel shading dominates. Benchmark 40 frames of the heaviest shot before committing to a DPR.
+
+## Hero models (what worked)
+Build heroes in a `people.js` module from smooth shapes, painted textures and a few physical materials:
+- **Body and clothes:** `loft()` (lib.js) sweeps elliptical rings `[y, rx, rz, cz]` that `smoothRings()` interpolates, so a fitted top, a waist, a sarong or a skirt is just a list of rings (for example hem .785/.18/.142, waist 1.03/.14/.108, bust 1.17/.158/.126, shoulders 1.335/.16/.10, neck 1.425/.058/.055). Arms are pivot groups: shoulders use rotation order XYZ, elbows YXZ so a bent forearm can swing inward for clasped hands. A small sphere at the shoulder pivot (radius about .04) hides the joint without puffing the sleeve. Long skirts deform each frame from the foot offsets, so walking reads without visible legs.
+- **Prints:** paint a tileable 2048² canvas (draw every motif and crackle line nine times with `wrap9`) with a half-drop motif grid, wax-crackle lines and dot fills. Around a closed loft `repeat.x` must be a whole number, and loft v is in metres, so `repeat.y = 1 / circumference` keeps motifs square. Trims are TubeGeometry along `ellipseCurve()` (necklines, hems, cuffs) plus a thin ribbon down the front, with a border texture. Fabric is MeshPhysicalMaterial with roughness .6, sheen 1 and sheenRoughness .32.
+- **Faces:** paint eyes (white almond, iris, highlight, liner flick), brows, lips and blush on a 2048×1024 canvas used as the head sphere's map. The front (+z) of a SphereGeometry is u=.25, so on that canvas the eyes sit near x 402 and 622, y 493, and the mouth near x 512, y 676. Add small ears and earrings; glasses are two tori and a bridge.
+- **Hair:** a cap shell made from a sphere rotated so its pole sits at the bun, where the strands converge. Push the radius inside the head where skin shows, with a gradual transition (about .1) so the hairline is smooth instead of jagged. Use a strand canvas as both `map` and `bumpMap`, on MeshPhysicalMaterial with anisotropy .8 (rotation π/2), roughness about .48, no clearcoat, and little sheen or env. Too much specular turns black hair grey.
+- **Volume that grows** (a beehive, an afro, a hat): a dome that follows the cap at its base, lifts away and ends in a hemispherical top. Widen it over the lower 35–55% of its height; a fast widening looks like a balloon on a stick. Rebuild the geometry in place when the size changes (a few thousand vertices is cheap), and add a squash-and-stretch overshoot (`springy()`) on growth beats.
+- **State changes:** swap colours with `addWipe()` (lib.js), a downward sweep with a gold glow band, plus a few additive sparkles.
+- **Proportions in this style:** head radius about .1 m with a 1.1× vertical stretch, 1–2 cm of neck showing, about 1.66 m tall before hair. Blocky crowd people are about 1.75–1.85 m.
 
 ## Workflow
+0. **Ideas first when asked.** If the user asks for ideas, research first (facts, dates, in-jokes, local slang), then propose 2–3 concepts: full beats with HUD stats for the one you recommend, a two-line pitch for each other one, and sources. Wait for their pick. If they reply without picking (for example "focus on quality"), build the recommended one and say so in your first line. If a premise centres on a real, named person, pitch it with a fictional stand-in and give the reason in one sentence.
 1. **Parse the narration into 7–10 shots.** Each shot gets: a timeline range (5.5–7.5 s), a HUD value and stat, 1–2 captions, a camera move, and the cast and actions. Write the shot list and send it to the user with SendUserMessage in one short message, then start building. Don't wait for approval unless the narration is genuinely unclear.
-2. **Set.** If the location is new, ask once for 3–6 phone photos or short clips (both ends of the corridor or street, the key shopfronts, a crowded moment). You can also use WebSearch and image_search for reference. Contact-sheet any videos with ffmpeg (`fps=12/dur,scale=300:-1,tile=4x3`) and Read them. Rebuild the set from the reference template below: change the floor, the canopy/slat colours, the shopfronts (`shop(z,len,name,sub,signBg,signFg,insideColor)`), the right-side features, and the far-end landmark. If the location is the Somerset/Orchard walkway, reuse the template set as-is.
+2. **Set.** If the location is new, ask once for 3–6 phone photos or short clips (both ends of the corridor or street, the key shopfronts, a crowded moment). You can also use WebSearch and image_search for reference. Contact-sheet any videos with ffmpeg (`fps=12/dur,scale=300:-1,tile=4x3`) and Read them. Rebuild the set from the reference template below: change the floor, the canopy/slat colours, the shopfronts (`shop(z,len,name,sub,signBg,signFg,insideColor)`), the right-side features, and the far-end landmark. If the location is the Somerset/Orchard walkway, reuse the template set as-is. For anything new, gather references and assets before modelling (see Quality bar). If you can't tell how the hero should look, ask 1–4 quick AskUserQuestion questions (outfit, hair, colours) first.
 3. **Cast and shots.** Edit the `casts` and `SH` arrays. Reusable pieces:
    - `person(style)`, with styles adult / xmm / xdd; add new styles to STY as needed
    - `pose()`, which takes walk, speed, sit, armUp, headYaw, headPitch, slump, lie and cheer
@@ -36,15 +62,22 @@ The user narrates a storyline ("what if Yo-Chi disappeared… day 1 the queue st
    - `stall` (a cardboard knock-off shop) and `tumble` (tumbleweed)
    - `glowL` for the lights-come-back-on beat
    Every shot's `upd(t)` must set visibility and position for everything it shows, because `renderAt` hides all people each frame.
-4. **Check stills before rendering.** Run `PAGE=film.html node render.js stills t1,t2,…` with one time per shot at its busiest moment. hstack them, Read the result and fix problems. Common problems:
-   - groups out of frame: portrait FOV is only about 35° wide, so keep cast within about ±2.5 units of the look line at 10 units out
+   Detailed heroes, per-set moods and per-shot `bloom`/`exposure`/`dof` overrides sit alongside these (see Hero models and post.js).
+4. **Check stills before rendering.** Run `PAGE=film.html node render.js stills t1,t2,…` at three moments per shot (start, busiest moment, end). Walkers on looping lanes and people walking in can cross the camera or block the subject partway through a shot, and one still per shot won't show it. Use `DPR=1` for these checks because it's faster, and the production DPR only for look tests. hstack them, Read the result and fix problems. Common problems:
+   - groups out of frame: portrait framing is narrow. At a 50° vertical FOV the frame is only about 29° wide, so anything more than about 14° off the look line is out; keep cast within about ±2.5 units of the look line at 10 units out
    - people sinking into seats: for a sitter, set `g.position.y≈.09–.11` and keep the hip x so the knees clear the bench edge
    - signs or props hidden behind the HUD (top-left, y 590–800) or the captions (y 1230–1400)
    - captions too long
-5. **Render.** Use one MP4 per shot and two parallel jobs (`runall.sh <port> <shot idx…>`). Run it with Bash `run_in_background` plus a wait loop, so you're notified when it's done. Expect about 1–1.5 s per frame per job on 2 cores, so a ~50 s video takes about 20–25 min. Tell the user the ETA. If they ask "check", report which shots are done.
-6. **Music and SFX.** Edit the EVENTS in `music.py` to the shot times: poof at each vanish, pips for cups or '?' pops, whoosh for the tumbleweed, the night hush, and the shimmer + cheer at the return. Set SP to the same SPEED and DUR to the timeline end.
-7. **Mux.** Concat with the demuxer and `-c copy`, add the audio with `-map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart`. Make a 16-frame contact sheet, Read it, and confirm every shot and caption is present. Then send it with SendUserFile (`display: render`). Describe what's in it in one or two lines and offer one concrete tweak.
-8. **Revisions.** Re-render only the shots that changed. Caption or sign changes affect every shot that shows them. A speed change means re-rendering everything and regenerating the music with the new SP.
+   - foreground people blocking the subject: move the camera to one side, raise it above head height, or route walkers away from the line of sight
+   - a climax subject that's small and dark (this has happened twice): bring it closer and light it with a rim light, torches or a pool of light
+   - height gags against a line on a wall: put the camera at the line's height, otherwise parallax makes everyone in front of it look taller
+   - title shots: keep subjects below the title band (y 440–760)
+   - hotspots: point lights near ceilings or glossy surfaces bloom into white blobs, so lower them or cut their intensity
+   - black hair or navy suits reading grey: too much clearcoat, sheen or env reflection
+5. **Render.** One MP4 per shot and two parallel jobs started with nohup (see runall.sh). Background processes are stopped a few minutes after your reply ends, so stay in the turn and check with foreground `sleep 540` calls until every shot is done, then mux and deliver in the same turn. With the quality pipeline at DPR 1.25 on 2 cores, expect about 4.5–6 s per frame per job for simple interiors, 6–7.5 s for big sets with crowds, and 8–9 s for depth-of-field close-ups or packed cabins. A 43 s video (1,284 frames) takes about 70–80 minutes. Tell the user the ETA as a clock time, and send a one-line update if it slips by more than about 15 minutes. Balance the jobs by cost rather than by shot count, and finish with the heaviest shot split into two halves rendered in parallel (`shot7a` and `shot7b`; the split offset from the shot start must be a whole number of frames, i.e. a multiple of 1/24 s timeline at 1.25×). Each shot render loads the page fresh, so editing film.html or a module mid-render changes every shot that hasn't started yet; only make edits that are safe for all of them. Contact-sheet each shot as it finishes so a bad one can be re-rendered while the rest are still running. If they ask "check", report which shots are done.
+6. **Music and SFX.** Edit the EVENTS in `music.py` to the shot times: poof at each vanish, pips for cups or '?' pops, whoosh for the tumbleweed, the night hush, and the shimmer + cheer at the return. Set SP to the same SPEED and DUR to the timeline end. Put every SFX on the exact beat it belongs to: boing for growth, thud for impacts, chime for an airport or PA moment, clicks for ratchets, tape measures and camera shutters. When flashes or pops are randomised in the page, replicate the page's RNG in Python to time them. Use `MUTE` to drop the bed for a standoff or a hush. Check the result with `showwavespic` and `volumedetect` (mean around −15 dB); the template normalises by RMS with a soft limiter, because normalising by peak lets one loud SFX make the whole track quiet.
+7. **Mux.** Concat with the demuxer and `-c copy`, add the audio with `-map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart`. Make a 16-frame contact sheet, Read it, and confirm every shot and caption is present. Then send it with SendUserFile (`display: render`). Describe what's in it in one or two lines, say honestly which shot is weakest, and offer one concrete tweak with its re-render time.
+8. **Revisions.** Re-render only the shots that changed. Caption or sign changes affect every shot that shows them. A speed change means re-rendering everything and regenerating the music with the new SP. Split a single re-rendered shot into two halves so both cores work on it.
 
 ## Setup (once per session)
 ```bash
@@ -52,11 +85,20 @@ mkdir -p $SCRATCH/build && cd $SCRATCH/build && npm init -y >/dev/null
 npm i three@0.160.0 @fontsource/crimson-pro@5.0.8 @fontsource/inter@5.0.16 >/dev/null
 # playwright + chromium are preinstalled: do NOT run playwright install
 ```
-Write film.html, render.js, runall.sh and music.py from the templates below into that folder.
+Write film.html, render.js, runall.sh, post.js, lib.js and music.py from the templates below into that folder.
+
+CC0 quality assets. The npm registry and raw.githubusercontent.com are reachable from the shell; most image hosts aren't.
+```bash
+mkdir -p assets && npm pack @pmndrs/assets >/dev/null 2>&1 && tar xzf pmndrs-assets-*.tgz
+node -e "const fs=require('fs');for(const n of ['night','city','sunset','dawn','park','lobby']){const s=fs.readFileSync('package/hdri/'+n+'.exr.js','utf8');fs.writeFileSync('assets/'+n+'.exr',Buffer.from(s.slice(s.indexOf('base64,')+7,s.lastIndexOf(String.fromCharCode(39))),'base64'))}"
+curl -s -o assets/waternormals.jpg https://raw.githubusercontent.com/mrdoob/three.js/r160/examples/textures/waternormals.jpg
+```
+The package's `textures/` and `normals/` folders use the same base64-in-JS format. Load an HDRI with `exrEnv()` from post.js and use it as an `envMap` on chosen materials (see Cost control).
 
 ## render.js
 ```js
-// node render.js stills t1,t2,...  |  node render.js video out.mp4 tStart tEnd   (env: PAGE, PORT, SPEED)
+// node render.js stills t1,t2,...  |  node render.js video out.mp4 tStart tEnd   (env: PAGE, PORT, SPEED, DPR, Q=query string)
+// DPR supersamples: frames are captured at DPR size and downscaled with lanczos; stills come out at DPR size.
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const { spawn } = require('child_process');
@@ -70,10 +112,11 @@ const srv = http.createServer((q, r) => {
 }).listen(Number(process.env.PORT||8765));
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const pg = await b.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
+  const pg = await b.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: Number(process.env.DPR || 1.25) });
   pg.on('pageerror', e => console.log('ERR', e.message));
-  await pg.goto(`http://localhost:${process.env.PORT||8765}/${process.env.PAGE||'film.html'}`);
-  await pg.waitForFunction(() => window.renderAt && window.ready, null, { timeout: 60000 });
+  pg.on('console', m => { const s = m.text(); if (m.type() === 'error' || s.startsWith('[log]')) console.log(m.type(), s.slice(0, 600)); });
+  await pg.goto(`http://localhost:${process.env.PORT||8765}/${process.env.PAGE||'film.html'}${process.env.Q ? '?' + process.env.Q : ''}`);
+  await pg.waitForFunction(() => window.renderAt && window.ready === true, null, { timeout: 300000 });
   const mode = process.argv[2], SPEED = Number(process.env.SPEED||1);
   if (mode === 'stills') {
     for (const t of process.argv[3].split(',').map(Number)) {
@@ -83,11 +126,13 @@ const srv = http.createServer((q, r) => {
   } else {
     const out = process.argv[3], t0s = Number(process.argv[4]), t1s = Number(process.argv[5]), fps = 30, n = Math.round((t1s - t0s) * fps / SPEED);
     const tmp = out.replace(/\.mp4$/, '.tmp.mp4');
-    const ff = spawn('ffmpeg', ['-y','-v','error','-f','image2pipe','-framerate',String(fps),'-c:v','mjpeg','-i','-','-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-movflags','+faststart',tmp], { stdio: ['pipe','inherit','inherit'] });
+    const ff = spawn('ffmpeg', ['-y','-v','error','-f','image2pipe','-framerate',String(fps),'-c:v','mjpeg','-i','-','-vf','scale=1080:1920:flags=lanczos','-c:v','libx264','-preset','slow','-crf','16','-pix_fmt','yuv420p','-movflags','+faststart',tmp], { stdio: ['pipe','inherit','inherit'] });
+    const st = Date.now();
     for (let i = 0; i < n; i++) {
       await pg.evaluate(t => window.renderAt(t), t0s + i * SPEED / fps);
       const buf = await pg.screenshot({ type: 'jpeg', quality: 92 });
       if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once('drain', r));
+      if (i % 30 === 0) console.log(`[log] ${out} frame ${i}/${n} avg ${((Date.now() - st) / 1000 / (i + 1)).toFixed(2)}s`);
     }
     ff.stdin.end();
     const code = await new Promise(r => ff.on('close', r));
@@ -100,12 +145,142 @@ const srv = http.createServer((q, r) => {
 ## runall.sh
 ```bash
 #!/bin/bash
-# ./runall.sh <port> <shot indices...>   — S must list every shot start plus the final end time, matching SH in film.html
-cd "$(dirname "$0")"; port=$1; shift
+# PORT=8801 ./runall.sh 0 2 4 6   (shot indices) — S must list every shot start plus the final end time, matching SH in film.html
+# Never write a dollar sign followed by a digit in this skill: skill arguments get substituted into those and break the script.
+cd "$(dirname "${BASH_SOURCE[0]}")"
 S=(0 5.5 12 18 25.5 33 40.5 47 54 60)
-for i in "$@"; do SPEED=${SPEED:-1.25} PORT=$port PAGE=film.html node render.js video shot$i.mp4 ${S[$i]} ${S[$((i+1))]}; done
+for i in "$@"; do DPR=${DPR:-1.25} SPEED=${SPEED:-1.25} PORT=${PORT:-8801} PAGE=${PAGE:-film.html} node render.js video shot$i.mp4 ${S[$i]} ${S[$((i+1))]} >> job_${PORT:-8801}.log 2>&1; done
 ```
-Start the two jobs with something like `(./runall.sh 8801 0 2 4 6 8 &); (./runall.sh 8802 1 3 5 7 &)`, then run a backgrounded wait loop: `while [ $(ls shot?.mp4 | wc -l) -lt N ] && pgrep -f 'render.js video'; do sleep 20; done`. Concat list: `file 'shot0.mp4'` … one line per shot.
+Start the two jobs with `(PORT=8801 nohup ./runall.sh 0 2 4 6 8 >/dev/null 2>&1 &); (PORT=8802 nohup ./runall.sh 1 3 5 7 >/dev/null 2>&1 &)`, then check from the foreground with calls like `sleep 540; ls shot*.mp4; grep -hF '[log]' job_*.log | tail -n 2` (each call can wait up to 10 minutes). To finish a heavy shot faster, render it as two halves in parallel, e.g. `DPR=1.25 SPEED=1.25 PORT=8823 nohup node render.js video shot7a.mp4 46.5 50 >job_a.log 2>&1 &` and the same for `shot7b.mp4 50 53.5` on another port. Concat list: `file 'shot0.mp4'` … one line per file, halves in order.
+
+## post.js (renderer, environment maps, bloom, grade, depth of field)
+```js
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, vig: { value: .32 }, sat: { value: 1.08 }, warm: { value: .04 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float vig, sat, warm; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(.2126,.7152,.0722));
+      c.rgb = mix(vec3(l), c.rgb, sat);
+      float k = smoothstep(0.0, 1.2, l);
+      c.rgb *= mix(vec3(1.0-warm*.6, 1.0, 1.0+warm), vec3(1.0+warm, 1.0, 1.0-warm*.8), k);
+      vec2 d = (vUv - .5) * vec2(1.0, 1.25);
+      c.rgb *= 1.0 - vig * smoothstep(.25, .95, dot(d,d) * 2.2);
+      gl_FragColor = c;
+    }`
+};
+export function makeRenderer(W, H) {
+  const dpr = window.devicePixelRatio || 1;   // set by render.js (DPR env); ffmpeg downscales with lanczos
+  const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(dpr); renderer.setSize(W, H);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  document.body.prepend(renderer.domElement);
+  return { renderer, dpr };
+}
+const pmrem = (renderer, fn) => { const pm = new THREE.PMREMGenerator(renderer); const t = fn(pm).texture; pm.dispose(); return t };
+export const roomEnv = renderer => pmrem(renderer, pm => pm.fromScene(new RoomEnvironment(renderer), .04));
+export function equirectEnv(renderer, draw) {   // paint a 1024x512 panorama (sky gradient, bright window bands) for reflections
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512; draw(c.getContext('2d'), 1024, 512);
+  const tex = new THREE.CanvasTexture(c); tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace;
+  return pmrem(renderer, pm => pm.fromEquirectangular(tex));
+}
+export async function exrEnv(renderer, url) {   // CC0 HDRIs from @pmndrs/assets, e.g. 'assets/night.exr'
+  const { EXRLoader } = await import('three/addons/loaders/EXRLoader.js');
+  const tex = await new EXRLoader().loadAsync(url); tex.mapping = THREE.EquirectangularReflectionMapping;
+  return pmrem(renderer, pm => pm.fromEquirectangular(tex));
+}
+export function makePost(renderer, scene, camera, W, H, dpr, samples = 0) {
+  const rt = new THREE.WebGLRenderTarget(W * dpr, H * dpr, { type: THREE.HalfFloatType, samples });
+  const composer = new EffectComposer(renderer, rt); composer.setPixelRatio(dpr); composer.setSize(W, H);
+  composer.addPass(new RenderPass(scene, camera));
+  const bokeh = new BokehPass(scene, camera, { focus: 3, aperture: .02, maxblur: .022 }); bokeh.enabled = false; composer.addPass(bokeh);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), .38, .55, .92); composer.addPass(bloom);
+  bloom.setSize(W * dpr / 2, H * dpr / 2);   // half-res bloom: same look, much cheaper
+  const grade = new ShaderPass(GradeShader); composer.addPass(grade);
+  composer.addPass(new OutputPass());
+  return { composer, bloom, bokeh, grade };
+}
+```
+In film.html, set `post.bloom.strength`, `renderer.toneMappingExposure` and `post.bokeh.enabled` every frame (the template does it from the shot's `bloom`, `exposure` and `dof`), with the bokeh focus at the camera-to-subject distance. Depth of field adds a full depth render, so keep it to one or two shots.
+
+## lib.js (helpers for hero models and sets)
+```js
+import * as THREE from 'three';
+export { THREE };
+export const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+export const lerp = (a, b, k) => a + (b - a) * k;
+export const ease = x => { x = clamp(x, 0, 1); return x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2 };
+export const easeOut = x => { x = clamp(x, 0, 1); return 1 - Math.pow(1 - x, 3) };
+export const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) };
+export const springy = (x, f = 2.2, d = 5) => x <= 0 ? 0 : 1 - Math.exp(-d * x) * Math.cos(f * Math.PI * x);   // 0 -> 1 with overshoot
+export function rng(seed) { let s = (Math.abs(Math.floor(seed)) % 2147483646) + 1; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646 } }
+export const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})` };
+export function canvasTex(w, h, draw, { repeat = [1, 1], srgb = true, aniso = 8, wrap = true } = {}) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
+  if (wrap) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); return t;
+}
+// draw something 9 times (offset by the canvas size) so the canvas tiles seamlessly
+export const wrap9 = (W, H, fn) => { for (const dx of [-W, 0, W]) for (const dy of [-H, 0, H]) fn(dx, dy) };
+const cr = (p0, p1, p2, p3, t) => { const t2 = t * t, t3 = t2 * t; return .5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3) };
+// control rings [y, rx, rz, cz] -> dense smooth rings (Catmull-Rom)
+export function smoothRings(ctrl, per = 4) {
+  const n = ctrl.length, out = [], g = (i, k) => ctrl[clamp(i, 0, n - 1)][k];
+  for (let i = 0; i < n - 1; i++) for (let s = 0; s < per; s++) { const o = []; for (let k = 0; k < 4; k++) o.push(cr(g(i - 1, k), g(i, k), g(i + 1, k), g(i + 2, k), s / per)); out.push(o) }
+  out.push([...ctrl[n - 1]]); return out;
+}
+export function fixSeam(g, segs, nRings) {   // average normals across the u=0/1 seam
+  const nr = g.attributes.normal;
+  for (let i = 0; i < nRings; i++) { const a = i * (segs + 1), b = a + segs, x = nr.getX(a) + nr.getX(b), y = nr.getY(a) + nr.getY(b), z = nr.getZ(a) + nr.getZ(b), l = Math.hypot(x, y, z) || 1; nr.setXYZ(a, x / l, y / l, z / l); nr.setXYZ(b, x / l, y / l, z / l) }
+  nr.needsUpdate = true;
+}
+// tube of elliptical rings, bottom -> top. uv: u around (0..1, front at u=0), v = arc length in metres
+export function loft(rings, segs = 64) {
+  const n = rings.length, pos = new Float32Array(n * (segs + 1) * 3), uv = new Float32Array(n * (segs + 1) * 2), idx = [], vs = [0];
+  for (let i = 1; i < n; i++) { const a = rings[i - 1], b = rings[i]; vs.push(vs[i - 1] + Math.hypot(b[0] - a[0], ((b[1] + b[2]) - (a[1] + a[2])) / 2)) }
+  for (let i = 0; i < n; i++) for (let j = 0; j <= segs; j++) {
+    const [y, rx, rz, cz] = rings[i], th = j / segs * Math.PI * 2, k = i * (segs + 1) + j;
+    pos.set([Math.sin(th) * rx, y, (cz || 0) + Math.cos(th) * rz], k * 3); uv.set([j / segs, vs[i]], k * 2);
+  }
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < segs; j++) { const a = i * (segs + 1) + j, b = a + 1, c = a + segs + 1, d = c + 1; idx.push(a, b, c, b, d, c) }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
+  g.computeVertexNormals(); fixSeam(g, segs, n); g.userData = { segs, n }; return g;
+}
+export function ellipseCurve(y, rx, rz, cz = 0, n = 48) {   // closed ring for TubeGeometry trims
+  const pts = []; for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; pts.push(new THREE.Vector3(Math.sin(a) * rx, y, cz + Math.cos(a) * rz)) }
+  return new THREE.CatmullRomCurve3(pts, true);
+}
+// colour change as a downward sweep with a gold glow band. The material needs a map. Set m.userData.u.map2.value to the
+// new texture and move m.userData.u.wipeY.value from above the character (10 = not started) to below the feet (-1 = done).
+export function addWipe(m, glow = new THREE.Color(1, .78, .35)) {
+  const u = { map2: { value: m.map }, wipeY: { value: 10 }, wipeW: { value: .035 }, glowC: { value: glow } };
+  m.userData.u = u; m.customProgramCacheKey = () => 'wipe1';
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+varying float vWY;`).replace('#include <begin_vertex>', `#include <begin_vertex>
+vWY = (modelMatrix * vec4(transformed, 1.0)).y;`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying float vWY; uniform sampler2D map2; uniform float wipeY, wipeW; uniform vec3 glowC;`)
+      .replace('#include <map_fragment>', `#ifdef USE_MAP
+  diffuseColor *= mix(texture2D(map, vMapUv), texture2D(map2, vMapUv), smoothstep(wipeY - wipeW, wipeY + wipeW, vWY));
+#endif`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+totalEmissiveRadiance += glowC * 4.0 * (1.0 - smoothstep(0.0, wipeW * 1.6, abs(vWY - wipeY)));`);
+  };
+  return m;
+}
+```
 
 ## music.py (generated soundtrack + SFX; times are TIMELINE seconds)
 ```python
@@ -113,7 +288,8 @@ import numpy as np, wave
 SP=1.25            # must match SPEED
 TIMELINE_END=60.0  # last shot end
 NIGHT_AT=54.0      # start of the night/return shot (music bed stops here); None to run to the end
-# EVENTS: (kind, timeline_time, extra)
+MUTE=[]            # [(start,end)] timeline windows where the bed drops out (a standoff, a hush)
+# EVENTS: (kind, timeline_time, extra). Kinds: poof, pips (extra=count), qpops (count), whoosh (duration), boing, thud, chime, clicks (count), return
 EVENTS=[('poof',9.1,None),('poof',21.4,None),('pips',22.4,13),('qpops',12.8,8),('whoosh',34.2,5.5),('return',54.0,None)]
 SR=44100; DUR=TIMELINE_END/SP; N=int(SR*DUR); out=np.zeros((N,2)); rng=np.random.default_rng(3)
 def note(f): return 440*2**((f-69)/12)
@@ -140,17 +316,31 @@ def noise(dur,lp):
 beat=60/84; bar=4*beat   # timeline units; real tempo = 84*SP bpm
 prog=[(57,[57,60,64]),(53,[53,57,60]),(48,[52,55,60]),(55,[55,59,62])]  # Am F C G music-box
 arp=[0,1,2,1,0,2,1,2]; end=NIGHT_AT or TIMELINE_END; t=0.0; k=0
+muted=lambda x:any(a<=x<b for a,b in MUTE)
 while t<end-0.01:
     root,ch=prog[k%4]
-    add(pad([c+12 for c in ch],bar/SP+.3),t,0,.16); add(bass(root-12,bar/SP),t,0,.35)
+    if not muted(t): add(pad([c+12 for c in ch],bar/SP+.3),t,0,.16); add(bass(root-12,bar/SP),t,0,.35)
     for i in range(8):
         tt=t+i*beat/2
         if tt>=end: break
-        add(pluck(ch[arp[i]]+24,1.0),tt,(-.3 if i%2 else .3),.22 if t>5 else .15)
+        if not muted(tt): add(pluck(ch[arp[i]]+24,1.0),tt,(-.3 if i%2 else .3),.22 if t>5 else .15)
     if k%2==1 and t>5:
-        for i,m in enumerate([ch[2],ch[1],ch[0]]): add(pluck(m+36,1.4,.6),t+i*beat*1.33,0,.10)
+        for i,m in enumerate([ch[2],ch[1],ch[0]]):
+            if not muted(t+i*beat*1.33): add(pluck(m+36,1.4,.6),t+i*beat*1.33,0,.10)
     t+=bar; k+=1
 def pip(t0,f): tt=np.arange(int(SR*.12))/SR; add(np.sin(2*np.pi*f*tt)*np.exp(-tt*30),t0,rng.uniform(-.5,.5),.15)
+def T(d): return np.arange(int(SR*d))/SR
+def bell(m,dur=2.4):   # PA-chime style bell
+    t=T(dur); f=note(m); s=0
+    for r,a,d in ((1,1,1.6),(2.0,.5,2.4),(2.76,.3,3.5),(5.4,.14,5)): s=s+a*np.sin(2*np.pi*f*r*t)*np.exp(-t*d)
+    return s*np.minimum(1,t*600)
+def boing(t0,f0=150,f1=330,g=.5):   # springy growth or pop
+    t=T(1.0); f=(f0+(f1-f0)*(1-np.exp(-6*t)))*(1+.22*np.exp(-4*t)*np.sin(2*np.pi*13*t))
+    ph=2*np.pi*np.cumsum(f)/SR; add((np.sin(ph)+.3*np.sin(2*ph))*np.exp(-t*3)*np.minimum(1,t*300),t0,0,g)
+def thud(t0,g=.6):   # impact or kick drum
+    t=T(.35); ph=2*np.pi*np.cumsum(95*np.exp(-t*5)+45)/SR; add(np.sin(ph)*np.exp(-t*9),t0,0,g)
+def click(t0,g=.2,pan=0):   # ratchet, tape measure, camera shutter
+    n=np.diff(rng.standard_normal(int(SR*.012)+1)); t=np.arange(len(n))/SR; add(n*np.exp(-t*400),t0,pan,g)
 for kind,t0,x in EVENTS:
     if kind=='poof':
         n=noise(1.0,.08); tt=np.arange(len(n))/SR; add(n*np.minimum(1,tt*60)*np.exp(-tt*4.5),t0,0,.9)
@@ -161,12 +351,17 @@ for kind,t0,x in EVENTS:
         for i in range(x): pip(t0+i*.22,700+((i*7)%5)*90)
     elif kind=='whoosh':
         n=noise(x,.03); tt=np.arange(len(n))/SR; add(n*np.sin(np.pi*tt/x)**2,t0,0,.35)
+    elif kind=='boing': boing(t0)
+    elif kind=='thud': thud(t0)
+    elif kind=='chime': add(bell(76),t0,-.1,.22); add(bell(72),t0+.5,.1,.22)
+    elif kind=='clicks':
+        for i in range(x): click(t0+i*.045)
     elif kind=='return':
         tt=np.arange(int(SR*1.2))/SR; add(np.sin(2*np.pi*55*tt)*np.exp(-tt*2),t0,0,.4)
         for i,m in enumerate([72,76,79,84,88,91]): add(pluck(m,1.6),t0+1.2+i*.07,(i%2-.5),.18)
         add(pad([60,64,67,72],4.5),t0+1.3,0,.3)
         c=noise(3.0,.25); tt=np.arange(len(c))/SR; add(c*np.minimum(1,tt/.4)*np.exp(-tt*.6)*.3,t0+1.8,0,1)
-out/=np.max(np.abs(out))*1.15
+rms=np.sqrt(np.mean(out**2)); out*=.13/rms; out=np.tanh(out*1.3)/np.tanh(1.3)*.94   # RMS + soft limit; peak-normalising lets one loud SFX make the whole track quiet
 fl=int(SR*1.5); out[-fl:]*=np.linspace(1,0,fl)[:,None]
 with wave.open('music.wav','wb') as w: w.setnchannels(2);w.setsampwidth(2);w.setframerate(SR);w.writeframes((out*32767).astype(np.int16).tobytes())
 ```
@@ -179,7 +374,7 @@ This is a complete working episode. For a new story, copy it and change:
 - the casts and the `SH` shot array
 - `runall.sh` S times and `music.py` EVENTS to match
 
-Keep the overlay CSS, the person/pose system, and the `renderAt` contract (`window.renderAt(T)`, `window.ready`).
+Keep the overlay CSS, the person/pose system, and the `renderAt` contract (`window.renderAt(T)`, `window.ready = true`). For bigger episodes, split the code into ES modules next to film.html (the importmap maps `three/addons/`): `lib.js`, `post.js`, `people.js` (hero models plus the blocky crowd), and `sets.js` (one function per set, each in its own group at its own origin, returning its lights and the materials a shot may change). Keep film.html for the cast, the `SH` array and `renderAt`. Shots can add `bloom`, `exposure`, `dof`, and `fov`/`focus` from `cam(t)`. Each shot sets its set's mood (lights, emissives, sky, fog) itself, so frames stay independent of render order.
 
 ```html
 <!doctype html>
@@ -200,19 +395,23 @@ canvas{display:block}
 #hud .m{font:700 20px Inter;letter-spacing:.14em;opacity:.95;margin-top:6px}
 #pill{display:inline-block;margin-top:40px;font:700 17px Inter;letter-spacing:.14em;padding:9px 18px;border-radius:30px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.75)}
 #cap{position:absolute;top:1230px;left:70px;right:70px;text-align:center;font:italic 400 60px/1.2 Crimson;text-shadow:0 3px 18px rgba(0,0,0,.8)}
+#hudbg{position:absolute;left:0;top:470px;width:820px;height:520px;opacity:0;background:radial-gradient(ellipse at 18% 48%,rgba(0,0,0,.34),rgba(0,0,0,0) 68%)}
+#capbg{position:absolute;left:0;right:0;top:1150px;height:330px;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,.3),rgba(0,0,0,0) 70%)}
 #black{position:absolute;inset:0;background:#000;opacity:0}
 #end{position:absolute;top:900px;left:0;right:0;text-align:center;font:italic 400 64px Crimson;color:#fff;opacity:0}
 </style></head>
 <body>
 <div id="ui">
+  <div id="hudbg"></div><div id="capbg"></div>
   <div id="title">What if <b>Yo-Chi</b> and<br><b>Molly Tea</b> just…<br>disappeared?</div>
   <div id="hud"><div class="k" id="hudk"></div><div class="v" id="hudv"></div><div class="m" id="hudm"></div><div id="pill">▶ SOMERSET, SINGAPORE</div></div>
   <div id="cap"></div>
   <div id="black"></div><div id="end">Part 2?</div>
 </div>
-<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
+import {makeRenderer,makePost} from './post.js';
 await Promise.all(['700 40px Inter','500 40px Inter','400 40px Crimson','italic 400 40px Crimson'].map(f=>document.fonts.load(f)));
 const W=1080,H=1920;
 let seed=11;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
@@ -222,13 +421,10 @@ const ease=x=>{x=clamp(x,0,1);return x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2};
 const lerp=(a,b,k)=>a+(b-a)*k;
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
-renderer.setSize(W,H);renderer.setPixelRatio(1);
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
-document.body.prepend(renderer.domElement);
+const {renderer,dpr}=makeRenderer(W,H);renderer.toneMappingExposure=1.05;   // supersampled via render.js DPR
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(58,W/H,0.1,400);
+const post=makePost(renderer,scene,camera,W,H,dpr);   // bloom + grade, optional depth of field
 
 function skyTex(stops){const c=document.createElement('canvas');c.width=4;c.height=256;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,256);stops.forEach(([o,col])=>gr.addColorStop(o,col));g.fillStyle=gr;g.fillRect(0,0,4,256);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
 const SKY_DUSK=skyTex([[0,'#2b3f7a'],[.55,'#6d78b8'],[1,'#e7a98f']]);
@@ -457,7 +653,7 @@ const SH=[
       const tx=-7.5,tz=-6+(i%6)*.4;const x=lerp(base.x,tx,go),z=lerp(base.z,tz,go);p.g.position.set(x,0,z);p.g.rotation.y=go>0?Math.atan2(tx-base.x,tz-base.z):Math.PI;
       pose(p,{walk:go>0&&go<1?1:0,speed:14,t,cheer:t>1.8&&t<2.4?ease((t-1.8)/.3):0})});}},
 ];
-const capEl=document.getElementById('cap'),titleEl=document.getElementById('title'),hudEl=document.getElementById('hud'),blackEl=document.getElementById('black'),endEl=document.getElementById('end');
+const capEl=document.getElementById('cap'),titleEl=document.getElementById('title'),hudEl=document.getElementById('hud'),blackEl=document.getElementById('black'),endEl=document.getElementById('end'),hudbg=document.getElementById('hudbg'),capbg=document.getElementById('capbg');
 const hk=document.getElementById('hudk'),hv=document.getElementById('hudv'),hm=document.getElementById('hudm');
 function fade(t,a,b,f=.3){return clamp(Math.min((t-a)/f,(b-t)/f),0,1)}
 window.renderAt=function(T){
@@ -467,14 +663,16 @@ window.renderAt=function(T){
   const night=sh.sky==='night';scene.background=night?SKY_NIGHT:SKY_DUSK;hemi.intensity=night?.45:1.1;sun.intensity=night?.25:1.6;scene.fog.color.set(night?0x111a35:0x8a86b4);
   stripMat.color.set(night?0xfff0c0:0xfff6e0);
   drawLED(T);sh.upd(t);
-  const c=sh.cam(t);camera.position.copy(c.p);camera.lookAt(c.l);
+  const c=sh.cam(t);camera.position.copy(c.p);camera.fov=c.fov||58;camera.updateProjectionMatrix();camera.lookAt(c.l);
+  post.bloom.strength=sh.bloom??.38;renderer.toneMappingExposure=sh.exposure??1.05;post.bokeh.enabled=!!sh.dof;if(sh.dof)post.bokeh.uniforms.focus.value=c.focus||camera.position.distanceTo(c.l);
   titleEl.style.opacity=sh.title?fade(t,-1,5.2,.4):0;
   if(sh.hud){hudEl.style.opacity=1;hk.textContent=sh.hud[0];hv.textContent=sh.hud[1];hm.textContent=sh.hudSwap&&t>=sh.hudSwap[0]?sh.hudSwap[1]:sh.hud[2];}else hudEl.style.opacity=0;
-  let html='',op=0;for(const [a,b,s] of sh.caps){const f=fade(t,a,b);if(f>0){html=s;op=f}}capEl.innerHTML=html;capEl.style.opacity=op;
+  hudbg.style.opacity=hudEl.style.opacity;
+  let html='',op=0;for(const [a,b,s] of sh.caps){const f=fade(t,a,b);if(f>0){html=s;op=f}}capEl.innerHTML=html;capEl.style.opacity=op;capbg.style.opacity=op;
   const last=sh===SH[SH.length-1];blackEl.style.opacity=last?clamp((t-3.7)/.5,0,1):0;endEl.style.opacity=last?fade(t,4.1,6.2,.3):0;
-  renderer.render(scene,camera);
+  post.composer.render();
 };
-window.ready=Promise.resolve(true);
+window.ready=true;
 </script></body></html>
 ```
 
@@ -483,3 +681,9 @@ window.ready=Promise.resolve(true);
 - Never use requestAnimationFrame or wall-clock time. Every frame is a pure function of `renderAt(T)`, so shots can render in parallel and the result is deterministic.
 - Shell network access is limited to package registries. If the user wants a trending sound, ask them to attach the audio and mux it instead of music.wav.
 - Write each shot to `*.tmp.mp4` and rename it only when ffmpeg exits 0, so a stopped render never leaves a half file.
+- Never write a dollar sign followed by a digit anywhere in this skill. When the skill is invoked with text after the command, that text is substituted into those spots, which broke runall.sh twice; the template uses `${BASH_SOURCE[0]}`, environment variables and `"$@"` instead.
+- Shot state must not leak between shots: each shot sets its own camera fov, set visibility, mood (lights, emissives, sky, fog), colours, hair sizes and prop visibility, because parallel jobs render shots out of order.
+- `new THREE.Box3().setFromObject(obj, true)` gives tight bounds. Without `true` it uses rotated bounding boxes and overshoots, which once put a "standard height" line above everyone.
+- On SwiftShader `gl.finish()` returns before the frame is drawn, so time frames by the screenshot (render.js logs averages every 30 frames).
+- LatheGeometry revolves around y; `geometry.rotateZ(Math.PI / 2)` lays the profile along −x, with the nose at the origin.
+- 3D pop-ups like the '?' sprites use `depthTest: false` and a high `renderOrder` so scenery never hides them.
